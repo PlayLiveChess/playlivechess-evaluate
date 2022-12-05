@@ -11,10 +11,24 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 
 from pathlib import Path
+import environ
+import os
+import chess
+import chess.engine
+
+# Initialise environment variables
+env = environ.Env(
+    # set casting, default values
+    DEBUG=(bool, True),
+    STOCKFISH_BINARY_PATH=(str, "stockfish"),
+    ANALYSIS_TIME=(float, 0.1)
+)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Take environment variables from .env file
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
@@ -23,9 +37,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-0_1+wd0tg1#dju7v$t$q0haq1vgj+h34g+0@47)(ms7w@y@+v!'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [ '*' ]
 
 
 # Application definition
@@ -121,3 +135,10 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+STOCKFISH_BINARY_PATH = env('STOCKFISH_BINARY_PATH')
+ANALYSIS_TIME = env('ANALYSIS_TIME')
+
+# print(os.path.join(BASE_DIR, STOCKFISH_BINARY_PATH))
+
+STOCKFISH_ENGINE = chess.engine.SimpleEngine.popen_uci(os.path.join(BASE_DIR, STOCKFISH_BINARY_PATH))
