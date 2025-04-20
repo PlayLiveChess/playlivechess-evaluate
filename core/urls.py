@@ -20,5 +20,5 @@ from . import views
 urlpatterns = [
     # path('admin/', admin.site.urls),
     path('eval-fen/', views.eval_fen),
-    # path('eval-moves/', views.eval_moves),
+    path('eval-moves/', views.eval_moves),
 ]
