@@ -1,3 +1,4 @@
+from threading import Lock
 from django.http import JsonResponse
 from django.conf import settings
 import chess
@@ -5,23 +6,28 @@ import chess.engine
 import json
 import os
 
+# Define a global lock for thread safety
+_engine_lock = Lock()
+
 def get_engine():
-    """Check if the engine is running, and reopen if necessary."""
-    try:
-        if settings.STOCKFISH_ENGINE is None or settings.STOCKFISH_ENGINE.protocol.closed:
+    """Ensure only one instance of the engine is created concurrently."""
+    with _engine_lock:
+        try:
+            if settings.STOCKFISH_ENGINE is None or settings.STOCKFISH_ENGINE.protocol.closed:
+                settings.STOCKFISH_ENGINE = chess.engine.SimpleEngine.popen_uci(
+                    os.path.join(settings.BASE_DIR, settings.STOCKFISH_BINARY_PATH)
+                )
+        except AttributeError:
+            # In case STOCKFISH_ENGINE is not initialized
             settings.STOCKFISH_ENGINE = chess.engine.SimpleEngine.popen_uci(
                 os.path.join(settings.BASE_DIR, settings.STOCKFISH_BINARY_PATH)
             )
-    except AttributeError:
-        # In case STOCKFISH_ENGINE is not initialized
-        settings.STOCKFISH_ENGINE = chess.engine.SimpleEngine.popen_uci(
-            os.path.join(settings.BASE_DIR, settings.STOCKFISH_BINARY_PATH)
-        )
 
     return settings.STOCKFISH_ENGINE
 
 
 def eval_fen(request):
+    """Evaluate a given FEN position using Stockfish."""
     try:
         body_unicode = request.body.decode('utf-8')
         body = json.loads(body_unicode)
@@ -31,11 +37,15 @@ def eval_fen(request):
     except:
         return JsonResponse({'error': 'Invalid position!'})
 
-    info = engine.analyse(board, chess.engine.Limit(time=settings.ANALYSIS_TIME))
-    return JsonResponse({'score': info['score'].white().wdl().expectation()})
+    try:
+        info = engine.analyse(board, chess.engine.Limit(time=settings.ANALYSIS_TIME))
+        return JsonResponse({'score': info['score'].white().wdl().expectation()})
+    except Exception:
+        return JsonResponse({'error': 'Engine analysis failed!'})
 
 
 def eval_moves(request):
+    """Get the best sequence of moves from Stockfish for a given position."""
     try:
         body_unicode = request.body.decode('utf-8')
         body = json.loads(body_unicode)
