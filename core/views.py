@@ -21,10 +21,14 @@ class StockfishEnginePool:
     def _initialize_engines(self):
         """Initialize the engine pool with engine instances."""
         for _ in range(self.max_engines):
-            engine = chess.engine.SimpleEngine.popen_uci(
-                os.path.join(settings.BASE_DIR, settings.STOCKFISH_BINARY_PATH)
-            )
+            engine = self._create_engine()
             self.engines.put(engine)
+    
+    def _create_engine(self):
+        """Create a new engine instance."""
+        return chess.engine.SimpleEngine.popen_uci(
+            os.path.join(settings.BASE_DIR, settings.STOCKFISH_BINARY_PATH)
+        )
     
     @contextmanager
     def get_engine(self):
@@ -32,7 +36,18 @@ class StockfishEnginePool:
         engine = None
         try:
             engine = self.engines.get(timeout=self.timeout)
-            yield engine
+            try:
+                # Test if engine is responsive
+                engine.ping()
+                yield engine
+            except Exception:
+                # If engine is in error state, close it and create new one
+                try:
+                    engine.quit()
+                except Exception:
+                    pass
+                engine = self._create_engine()
+                yield engine
         finally:
             if engine:
                 self.engines.put(engine)
@@ -43,7 +58,10 @@ class StockfishEnginePool:
             while not self.engines.empty():
                 try:
                     engine = self.engines.get_nowait()
-                    engine.quit()
+                    try:
+                        engine.quit()
+                    except Exception:
+                        pass
                 except queue.Empty:
                     break
 
