@@ -147,3 +147,5 @@ ANALYSIS_TIME = env('ANALYSIS_TIME')
 # print(os.path.join(BASE_DIR, STOCKFISH_BINARY_PATH))
 
 STOCKFISH_ENGINE = chess.engine.SimpleEngine.popen_uci(os.path.join(BASE_DIR, STOCKFISH_BINARY_PATH))
+
+STOCKFISH_MAX_ENGINES = env.int('STOCKFISH_MAX_ENGINES', 4)
