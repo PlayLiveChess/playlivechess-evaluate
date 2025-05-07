@@ -6,8 +6,8 @@ import json
 import os
 import queue
 import threading
-import time
 from contextlib import contextmanager
+from cachetools import LRUCache
 
 # Create a thread-safe engine pool
 class StockfishEnginePool:
@@ -130,6 +130,51 @@ def eval_moves(request):
 
             score = info['score'].white().wdl().expectation()
             return JsonResponse({'score': score, 'moves': moves, 'move_string': move_string.strip()})
+    except queue.Empty:
+        return JsonResponse({'error': 'No engine available, server is busy!'})
+    except Exception as e:
+        return JsonResponse({'error': f'Engine analysis failed: {str(e)}'})
+
+# Initialize the evaluation cache with a maximum size
+evaluation_cache = LRUCache(maxsize=100000)
+
+def eval_bars(request):
+    """Evaluate a chess position from a FEN string and return a numerical score."""
+    fen = request.GET.get('fen')
+    
+    if not fen:
+        return JsonResponse({'error': 'FEN string not provided'}, status=400)
+    
+    # Check if we have this evaluation cached
+    if fen in evaluation_cache:
+        return JsonResponse({'evaluation': evaluation_cache[fen]})
+    
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        return JsonResponse({'error': 'Invalid FEN string'}, status=400)
+    
+    try:
+        with ENGINE_POOL.get_engine() as engine:
+            # Use a deeper analysis for this endpoint
+            info = engine.analyse(board, chess.engine.Limit(depth=17))
+            
+            # Convert the score to a decimal value similar to the Flask app
+            score_obj = info['score'].white()
+            
+            if score_obj.is_mate():
+                # Handle mate scores
+                mate_score = score_obj.mate()
+                score = 9999 * (mate_score / abs(mate_score))
+                score = round(score, 1)
+            else:
+                # Handle centipawn scores
+                score = score_obj.score() / 100.0
+            
+            # Cache the result
+            evaluation_cache[fen] = score
+            
+            return JsonResponse({'evaluation': score})
     except queue.Empty:
         return JsonResponse({'error': 'No engine available, server is busy!'})
     except Exception as e:
